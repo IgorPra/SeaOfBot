@@ -32,6 +32,9 @@ defmodule SeaOfBot do
       String.starts_with?(msg.content, "!country") ->
         Message.create(msg.channel_id, SeaOfBot.Command.Country.handle_country(msg))
 
+      String.starts_with?(msg.content, "!livro") ->
+        Message.create(msg.channel_id, SeaOfBot.Command.Livro.handle_livro(msg))
+
       true ->
         :ignore
     end

@@ -2,64 +2,78 @@ defmodule SeaOfBot.Command.Remember do
   alias SeaOfBot.Store
 
   def handle_remember(msg) do
-    case String.split(msg.content, " ", parts: 2) do
-      ["!lembrar", text] -> save(msg.author.id, text)
-      _ -> "Use: !lembrar <texto>"
+    list = msg.content |> String.trim() |> String.split(" ")
+
+    case list do
+      ["!lembrar"] ->
+        "Use o comando como:\n" <>
+        "!lembrar <nome da tarefa> -> para adicionar\n" <>
+        "!lembrar done <id> -> para concluir\n" <>
+        "!lembrar delete <id> -> para remover"
+
+      ["!lembrar", "done", id_str] ->
+        todos = Store.load()
+        id = String.to_integer(id_str)
+        novos_todos = mark_done(todos, id)
+        Store.save(novos_todos)
+        "Tarefa ##{id} marcada como concluída!"
+
+      ["!lembrar", "delete", id_str] ->
+        todos = Store.load()
+        id = String.to_integer(id_str)
+        novos_todos = delete(todos, id)
+        Store.save(novos_todos)
+        "Tarefa ##{id} removida!"
+
+      ["!lembrar" | rest] ->
+        nome_tarefa = Enum.join(rest, " ")
+        todos = Store.load()
+        novos_todos = add(todos, nome_tarefa)
+        Store.save(novos_todos)
+        "Tarefa adicionada: #{nome_tarefa}"
+
+      _ ->
+        "Comando inválido!"
     end
   end
 
   def handle_memories(msg) do
-    data = Store.load()
-
-    memories =
-      data
-      |> Map.get("users", %{})
-      |> Map.get(to_string(msg.author.id), [])
-
-    if memories == [] do
-      "Voce ainda nao salvou nenhuma lembranca. Use: !lembrar <texto>"
-    else
-      memories
-      |> Enum.with_index(1)
-      |> Enum.map_join("\n", fn {entry, index} ->
-        extra = Map.get(entry, "extra")
-        text = Map.get(entry, "text", "")
-
-        if is_binary(extra) and extra != "" do
-          "#{index}. #{text} (Sugestao: #{extra})"
-        else
-          "#{index}. #{text}"
-        end
-      end)
-      |> then(&"Suas lembrancas:\n#{&1}")
+    if String.starts_with?(msg.content, "!memorias") do
+      todos = Store.load()
+      list(todos)
     end
   end
 
-  defp save(user_id, text) do
-    # Chamada da API externa para salvar uma sugestao junto da lembranca.
-    {:ok, res} = HTTPoison.get("https://www.boredapi.com/api/activity")
+  defp new_id, do: :os.system_time(:millisecond)
 
-    case Jason.decode(res.body) do
-      {:ok, json} ->
-        entry = %{
-          "text" => text,
-          "extra" => json["activity"]
-        }
+  def add(todos, name) do
+      task = %{id: new_id(), name: name, done: false}
+      todos ++ [task]
+  end
 
-        data = Store.load()
+  def delete(todos, id) do
+    Enum.reject(todos, fn t -> t.id == id end)
+  end
 
-        users = Map.get(data, "users", %{})
+  def mark_done(todos, id) do
+    Enum.map(todos, fn t ->
+      if t.id == id, do: Map.put(t, :done, true), else: t
+    end)
+  end
 
-        user_entries = Map.get(users, to_string(user_id), [])
+  def list(todos) do
+    if Enum.empty?(todos) do
+      "Nenhuma tarefa cadastrada!"
+    else
+      itens =
+        todos
+        |> Enum.map(fn t ->
+          status = if t.done, do: "✅", else: "❌"
+          "[#{status}] ##{t.id} - #{t.name}"
+        end)
+        |> Enum.join("\n")
 
-        updated_users = Map.put(users, to_string(user_id), user_entries ++ [entry])
-
-        Store.save(%{"users" => updated_users})
-
-        "Salvo! 💾\nSugestão: #{json["activity"]}"
-
-      _ ->
-        "Erro ao acessar API externa."
+      "📝 Suas tarefas:\n" <> itens
     end
   end
 end

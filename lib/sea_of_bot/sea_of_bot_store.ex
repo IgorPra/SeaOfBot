@@ -3,22 +3,19 @@ defmodule SeaOfBot.Store do
 
   def load do
     case File.read(@file_path) do
+      {:ok, ""} ->
+        []
       {:ok, content} ->
         content
         |> Jason.decode!()
-        |> normalize()
-
-      {:error, _} ->
-        %{"users" => %{}}
+        |> Enum.map(fn t -> %{id: t["id"], name: t["name"], done: t["done"]} end)
+      {:error, _} -> []
     end
   end
 
-  def save(data) do
-    data
+  def save(dados) do
+    dados
     |> Jason.encode!(pretty: true)
     |> then(&File.write!(@file_path, &1))
   end
-
-  defp normalize(%{"users" => users}) when is_map(users), do: %{"users" => users}
-  defp normalize(_data), do: %{"users" => %{}}
 end
